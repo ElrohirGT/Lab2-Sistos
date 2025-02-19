@@ -176,5 +176,6 @@ int main(int argc, char **argv) {
     unmap_memory(mem_pointer, mem_size);
     // This is expected to fail on the second program...
     unlink_memory(shared_mem_title);
+    printf("%s: Unlinked memory!\n", x);
   }
 }
