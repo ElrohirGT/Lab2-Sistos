@@ -30,7 +30,8 @@ void unlink_memory(char *name) {
 int main(int argc, char **argv) {
   printf("Parsing args...");
   if (argc != 3) {
-    fprintf(stderr, "Invalid quantity of arguments supplied!\n");
+    fprintf(stderr, "Invalid quantity of arguments supplied! Count: %d\n",
+            argc);
     return 1;
   }
 
@@ -47,7 +48,7 @@ int main(int argc, char **argv) {
   char *shared_mem_title = "/Lab2-Sistos-EJ5";
   const int mem_size = 255;
 
-  printf("Opening shared memory...");
+  printf("%s: Opening shared memory...", x);
   int descriptor =
       shm_open(shared_mem_title, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
   if (descriptor == -1) {
@@ -60,6 +61,7 @@ int main(int argc, char **argv) {
     case EEXIST:
       // Operation failed because the shared memory file already exists!
       // Creating connection without using truncate.
+      printf("%s: Memory was already opened!", x);
       descriptor = shm_open(shared_mem_title, O_RDWR, S_IRUSR | S_IWUSR);
       should_quit = 0;
       break;
@@ -69,28 +71,30 @@ int main(int argc, char **argv) {
     }
 
     if (should_quit) {
-      fprintf(stderr, "Failed to open the shared memory space! Inner: %s\n",
-              inner_error);
+      fprintf(stderr, "%s: Failed to open the shared memory space! Inner: %s\n",
+              x, inner_error);
       return 1;
     }
   } else {
     if (ftruncate(descriptor, mem_size) == -1) {
-      fprintf(stderr, "Failed to truncate shared memory file!\n");
+      fprintf(stderr, "%s: Failed to truncate shared memory file!\n", x);
       return 1;
     }
   }
-  printf("DONE!\n");
+  printf("%s: DONE!\n", x);
 
-  printf("Mapping shared memory to process memory...");
-  void *mem_pointer =
-      mmap(NULL, mem_size, PROT_WRITE, MAP_SHARED_VALIDATE, descriptor, 0);
+  printf("%s: Mapping shared memory to process memory...", x);
+  void *mem_pointer = mmap(NULL, mem_size, PROT_READ | PROT_WRITE,
+                           MAP_SHARED_VALIDATE, descriptor, 0);
   if (mem_pointer == MAP_FAILED) {
-    fprintf(stderr, "Failed to map shared memory to process memory!\n");
+    fprintf(stderr, "%s: Failed to map shared memory to process memory!\n", x);
+    unlink_memory(shared_mem_title);
     return 1;
   }
-  printf("DONE!\n");
+  printf("%s: DONE!\n", x);
+  printf("%s: Pointer created using: %p\n", x, mem_pointer);
 
-  printf("Opening pipe...");
+  printf("%s: Opening pipe...", x);
   int result = pipe(process_pipe);
   if (result == -1) {
     char *inner_error = "";
@@ -114,18 +118,19 @@ int main(int argc, char **argv) {
       break;
     }
 
-    fprintf(stderr, "Failed to initialize pipe! Inner: %s\n", inner_error);
+    fprintf(stderr, "%s: Failed to initialize pipe! Inner: %s\n", x,
+            inner_error);
 
     unmap_memory(mem_pointer, mem_size);
     unlink_memory(shared_mem_title);
 
     return 1;
   }
-  printf("DONE!\n");
+  printf("%s: DONE!\n", x);
 
   int pid = fork();
   if (pid == -1) {
-    fprintf(stderr, "Failed to create child process!\n");
+    fprintf(stderr, "%s: Failed to create child process!\n", x);
 
     unmap_memory(mem_pointer, mem_size);
     unlink_memory(shared_mem_title);
@@ -134,18 +139,18 @@ int main(int argc, char **argv) {
   } else if (pid == 0) {
     // We're on the child
     close(process_pipe[1]);
-    char *buff[1];
+    char buff[1];
     for (int i = 0; i < mem_size; i++) {
       int read_bytes = read(process_pipe[0], buff, 1);
 
       if (read_bytes == -1) {
-        fprintf(stderr, "Failed to read from pipe!\n");
+        fprintf(stderr, "%s: Failed to read from pipe!\n", x);
         close(process_pipe[0]);
         return 1;
       } else if (read_bytes == 0) {
         break;
       } else {
-        ((char *)(mem_pointer))[i] = *buff[0];
+        ((char *)mem_pointer)[i] = buff[0];
       }
     }
 
@@ -164,13 +169,11 @@ int main(int argc, char **argv) {
     close(process_pipe[1]);
     wait(NULL);
 
-    printf("Printing shared memory...\n");
-    for (int i = 0; i < mem_size; i++) {
-      printf("%c", ((char *)mem_pointer)[i]);
-    }
-    printf("\nOnly %d are divisible!\n", divisible_count);
+    printf("%s: Printing shared memory: `", x);
+    printf("%s", (char *)mem_pointer);
+    printf("`\n%s: Only %d are divisible!\n", x, divisible_count);
 
     unmap_memory(mem_pointer, mem_size);
-    unlink_memory(shared_mem_title);
+    // unlink_memory(shared_mem_title);
   }
 }
