@@ -174,6 +174,7 @@ int main(int argc, char **argv) {
     printf("`\n%s: Only %d are divisible!\n", x, divisible_count);
 
     unmap_memory(mem_pointer, mem_size);
-    // unlink_memory(shared_mem_title);
+    // This is expected to fail on the second program...
+    unlink_memory(shared_mem_title);
   }
 }
